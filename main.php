@@ -7,7 +7,6 @@
 set_time_limit(0);
 
 date_default_timezone_set('Europe/Kiev');
-//header('Content-Type: text/plain; charset=utf-8');
 
 include 'sqlite.php';
 
@@ -16,7 +15,7 @@ define('file_output', 'output.txt');
 define('file_words',  'words.txt');
 define('file_missed', 'missed.txt');
 
-// Create the stream context
+// Create the stream context for file_get_contents request
 $context = stream_context_create(array(
 	'http' => array(
 		'timeout' => 10	// timeout in seconds
@@ -31,6 +30,11 @@ try {
 	die('Connection failed: '.$e->getMessage());
 }
 
+/**
+ * Returns word id by name
+ * @param string $word
+ * @return int
+ */
 function GetWordID ( $word ) {
 	if ( ($data = db_query(sprintf("select id from words where word = '%s' limit 1", db_escape($word)))) ) {
 		$data = $data->fetch(PDO::FETCH_ASSOC);
@@ -38,6 +42,11 @@ function GetWordID ( $word ) {
 	}
 }
 
+/**
+ * Downloads all media files for given word
+ * @global array $context stream context for file_get_contents request
+ * @param array $jdata
+ */
 function SaveSound ( & $jdata ) {
 	global $context;
 	if ( $jdata && isset($jdata['primaries']) ) {
@@ -69,6 +78,11 @@ function SaveSound ( & $jdata ) {
 	}
 }
 
+/**
+ * Collects all media files for given word
+ * @param string $word
+ * @return array
+ */
 function GetSoundList ( $word ) {
 	$list = array();
 	if ( $word ) {
@@ -85,10 +99,14 @@ function GetSoundList ( $word ) {
 	return $list;
 }
 
+/**
+ * Error messages translator
+ * @return string
+ */
 function json_error () {
 	switch (json_last_error()) {
         case JSON_ERROR_NONE:
-            //echo $word, ' - No errors';
+            // No errors
         break;
         case JSON_ERROR_DEPTH:
             return "Maximum stack depth exceeded\n";
@@ -111,6 +129,11 @@ function json_error () {
     }
 }
 
+/**
+ * Formats the translation
+ * @param array $data
+ * @return string 
+ */
 function PrepareTranslation ( $data ) {
 	$result = '';
 	if ( $data ) {
@@ -140,13 +163,15 @@ function PrepareTranslation ( $data ) {
 					}
 					$result .= '<br><b>' . implode(', ', $labels) . '</b>: ' . implode(', ', $meanings);
 				}
-				//$result .= '<br>';
 			}
 		}
 	}
 	return $result;
 }
 
+/**
+ * Produces the final word list with all data
+ */
 function GenerateFacts () {
 	$items = db_array(db_query('select word, translation from words where translation <> ""'));
 	if ( $items ) {
@@ -156,11 +181,47 @@ function GenerateFacts () {
 			$trans  = PrepareTranslation($item['translation']);
 			$lines .= $item['word'] . "\t" . $trans . "\t" . implode('', $sounds) . "\n";
 		}
-		//echo $lines;
 		file_put_contents(file_output, $lines);
 	}
 }
 
+/**
+ * Retrive the given word data
+ * @global array $context
+ * @param string $word
+ * @return string
+ */
+function GetWordData ( $word ) {
+	global $context;
+	
+	$query = '';
+	
+	try {
+		$query = file_get_contents("http://www.google.com/dictionary/json?callback=dict_api.callbacks.id100&q=$word&sl=en&tl=ru&restrict=pr&client=te", 0, $context);
+	} catch (Exception $e) {
+		echo "\nexception: ",  $e->getMessage(), "\n";
+		sleep(1);
+		try {
+			$query = file_get_contents("http://www.google.com/dictionary/json?callback=dict_api.callbacks.id100&q=$word&sl=en&tl=ru&restrict=pr&client=te", 0, $context);
+		} catch (Exception $e) {
+			echo "\nexception again: ",  $e->getMessage(), "\n";
+		}
+	}
+	
+	if ( $query ) {
+		$query = str_replace(array('dict_api.callbacks.id100(', ',200,null)'), '', $query);
+		$query = str_replace('\x26', "&", $query);
+		$query = str_replace('\x27', "'", $query);
+		$query = html_entity_decode($query, ENT_QUOTES);
+	}
+	return $query;
+}
+
+/**
+ * Add word to the list or words to be processed
+ * @param array $word_list
+ * @param string $word 
+ */
 function AddWord ( & $word_list, $word ) {
 	$word = trim($word, "\x00..\x1F"); // trim the ASCII control characters
 	$word = trim($word, '~!@#$%^&*()_+{}[]\\|<>.,?/";%:()-=\''); // trim the ASCII control characters
@@ -189,7 +250,6 @@ foreach ( str_word_count(strtolower($file_input), 1) as $word ) {
 			}
 		}
 		
-		
 		if ( substr($word, -1) == 's' ) {
 			AddWord($word_list, substr($word, 0, -1));
 		}
@@ -208,6 +268,8 @@ foreach ( str_word_count(strtolower($file_input), 1) as $word ) {
 	}
 }
 
+$dbh->beginTransaction();
+
 $word_list_sorted = array();
 foreach ( $word_list as $word => $word_count ) {
 	$word_list_sorted[$word_count][] = $word;
@@ -215,57 +277,21 @@ foreach ( $word_list as $word => $word_count ) {
 krsort($word_list_sorted);
 
 file_put_contents(file_words, print_r($word_list, true));
-//file_put_contents(file_output, print_r($word_list_sorted, true));
 
 file_put_contents(file_missed, "\n" . date('Y.m.d H:i:s') . "\n", FILE_APPEND);
 $utime = time();
-
-function GetWordData ( $word ) {
-	global $context;
-	
-	$query = '';
-	
-	try {
-		$query = file_get_contents("http://www.google.com/dictionary/json?callback=dict_api.callbacks.id100&q=$word&sl=en&tl=ru&restrict=pr&client=te", 0, $context);
-	} catch (Exception $e) {
-		echo "\nexception: ",  $e->getMessage(), "\n";
-		sleep(1);
-		try {
-			$query = file_get_contents("http://www.google.com/dictionary/json?callback=dict_api.callbacks.id100&q=$word&sl=en&tl=ru&restrict=pr&client=te", 0, $context);
-		} catch (Exception $e) {
-			echo "\nexception again: ",  $e->getMessage(), "\n";
-		}
-	}
-	
-	if ( $query ) {
-		$query = str_replace(array('dict_api.callbacks.id100(', ',200,null)'), '', $query);
-		$query = str_replace('\x26', "&", $query);
-		$query = str_replace('\x27', "'", $query);
-		$query = html_entity_decode($query, ENT_QUOTES);
-	}
-	return $query;
-}
-
-/*$jdata = json_decode($query, true);
-echo($query);
-echo(json_error($word));
-print_r($jdata);
-exit;/**/
 
 foreach ( $word_list_sorted as $wcount => $wlist ) {
 	if ( $wcount ) {
 		foreach ( $wlist as $word ) {
 			$id_word = GetWordID($word);
-			//$id_word = null;
 			if ( !$id_word ) {
 				$query = GetWordData($word);
 				if ( $query ) {
 					$jdata = json_decode($query, true);
 					$error = json_error($word);
-					//file_put_contents(file_output, "\n" . $query . "\n", FILE_APPEND);
 					if ( isset($jdata['primaries']) ) {
 						echo "$word ";
-						//file_put_contents(file_output, print_r($jdata, true) . "\n**********************************\n", FILE_APPEND);
 						$translation = $query;
 						$sql = sprintf("insert into words (word, translation, time) values ('%s', '%s', %s)", db_escape($word), db_escape($translation), $utime);
 						db_insert($sql);
@@ -285,10 +311,6 @@ foreach ( $word_list_sorted as $wcount => $wlist ) {
 		}
 	}
 }
-
-//$query = file_get_contents('http://www.google.com/dictionary/json?callback=dict_api.callbacks.id100&q=don't&sl=en&tl=ru&restrict=pr,de&client=te');
-//$query = str_replace(array('dict_api.callbacks.id100(', ',200,null)'), '', $query);
-//echo($query);
 
 GenerateFacts();
 

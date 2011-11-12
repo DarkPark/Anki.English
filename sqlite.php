@@ -1,13 +1,22 @@
 <?php
 /**
- * Sqlite module
- * function set
+ * Sqlite module simple function set
+ * @author DarkPark, Urkaine Odessa 2011
  */
 
+/**
+ * Dumps the message
+ * @param string $message 
+ */
 function mlog ( $message ) {
-	echo "$message<br>\n";
+	echo "$message\n";
 }
 
+/**
+ * Escapes sql string
+ * @param string $data
+ * @return string
+ */
 function db_escape ( $data ) {
 	if ( $data ) {
 		//$data = str_replace('"', '""', $data);
@@ -100,6 +109,11 @@ function db_update ( $sql ) {
 	}
 }
 
+/**
+ * Execs sql query
+ * @global PDO $dbh
+ * @param string $sql 
+ */
 function db_exec ( $sql ) {
 	global $dbh;
 	if ( $dbh && $sql ) {
