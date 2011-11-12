@@ -2,3 +2,11 @@ Anki is a program which makes remembering things easy. Because it is a lot more 
 http://ankisrs.net/
 
 This project allows to fill the Anki learning deck with the translated words from English to Russian with transcription and pronunciation. The data is requesting from google dictionary, parsing, downloading media files and preparing single txt file with all translated words ready to be imported into the Anki deck. Media files are downloading in the audio directory and then should be places in the deck's media folder.
+
+Files descriptions:
+  input.txt - put your text here
+  output.txt - contains words and translations, need to be imported to Anki deck
+  words.txt - contains found words
+  missed.txt - words failed to be translated
+
+For output.txt generation just prepare input.txt and then run main.php without any parameters.
