@@ -1,0 +1,2 @@
+Just put in this file any text data you want.
+Plain sentences, comma separated or one word per line.
